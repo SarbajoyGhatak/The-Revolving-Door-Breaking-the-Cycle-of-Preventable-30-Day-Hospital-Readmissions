@@ -1,0 +1,98 @@
+US Hospital Readmission Project — Cleaning & Statistical Decisions Log
+Documented from the beginning of the project up to 3 November 2026.
+1. Data sources and raw tables
+- HRRP dataset imported into public.hrrp_raw with all original columns initially stored as TEXT.
+- Hospital General Information dataset imported into public.hospital_general_information_raw with all original columns initially stored as TEXT.
+- Raw tables are preserved separately from cleaned and analysis tables.
+- HRRP raw dataset contains 18,330 records across 3,055 facilities and six readmission measures.
+- Hospital General Information raw dataset contains 5,419 records.
+- Facility ID selected as the common identifier for joining HRRP and hospital information datasets.
+2. HRRP cleaning decisions
+- Created public.hrrp_clean as the cleaned HRRP dataset.
+- Renamed original columns into lowercase snake_case for easier SQL querying and automation.
+- Converted facility_id to BIGINT.
+- Converted number_of_discharges to INTEGER.
+- Converted number_of_readmissions to INTEGER where numeric values were available.
+- Converted Excess Readmission Ratio to NUMERIC(12,6).
+- Converted Predicted Readmission Rate to NUMERIC(12,6).
+- Converted Expected Readmission Rate to NUMERIC(12,6).
+- Converted Start Date and End Date into DATE columns in the clean-table schema.
+- Preserved footnote information in the HRRP clean table.
+- Checked duplicate records using Facility ID and Measure Name; no duplicate hospital-measure combinations were found.
+- Retained all six HRRP measures rather than restricting the dataset to a single condition.
+- Identified three original readmission-count categories: numeric values, N/A, and Too Few to Report.
+- Converted numeric readmission counts into INTEGER values while retaining unavailable or suppressed counts as NULL in the numeric column.
+- Decided to preserve the original status separately using a TEXT display column.
+- Standardized Too Few to Report to <10 for dashboard display.
+- Preserved N/A as N/A rather than treating it as zero.
+- Kept unmatched HRRP records as NULL rather than converting them to N/A.
+- Identified 6,610 N/A records and 3,683 Too Few to Report records in the original HRRP dataset.
+- Identified 8,037 records with numeric readmission counts.
+3. Hospital General Information cleaning decisions
+- Created public.hospital_general_information_clean from the raw hospital information table.
+- Standardized column names into lowercase snake_case.
+- Converted Facility ID into BIGINT.
+- Converted Hospital Overall Rating into INTEGER.
+- Converted applicable count fields into INTEGER.
+- Standardized missing and unavailable values during cleaning.
+- Removed records without a valid Facility ID.
+- Removed duplicate hospital records.
+- Retained 5,255 records in the cleaned hospital information table.
+- Created public.hospital_information_analysis as a reduced hospital information table.
+- Retained Facility ID, Facility Name, Address, City, State, County, Hospital Type, Hospital Ownership, Emergency Services, Birthing-Friendly Designation, and Hospital Overall Rating.
+- Removed Telephone Number from the analysis table.
+- Removed ZIP Code from the analysis table.
+- Removed all footnote columns from the analysis table.
+- Excluded MORT, Safety, READM, Patient Experience (Pt Exp), and Timely and Effective Care (TE) measure groups from this analysis table.
+- Decided not to use the General Information READM summary group as a substitute for the six HRRP measures because the measures are not identical.
+4. Statistical and readmission-rate decisions
+- Decided not to calculate national or state readmission rates using simple averages of hospital-level percentages.
+- Weighted aggregation using appropriate discharge denominators was selected as the preferred approach wherever the required data is available.
+- Defined the calculated crude readmission rate as:
+Number of Readmissions / Number of Discharges × 100
+- Decided to calculate crude readmission rates only when both numeric readmission counts and valid discharge counts are available.
+- Decided not to treat N/A as zero readmissions.
+- Decided not to calculate readmission rates for Too Few to Report records because their discharge counts are unavailable.
+- Decided not to calculate upper-bound readmission rates for suppressed records because the original dataset provides N/A for their discharge denominators.
+- Removed upper-bound rate calculations from the planned final analysis table.
+- Retained Excess Readmission Ratio, Predicted Readmission Rate, and Expected Readmission Rate as separate HRRP measures.
+- Distinguished calculated crude readmission rates from official CMS risk-standardized measures.
+- Decided that <10 must be displayed as a suppressed count, not interpreted as evidence of better hospital performance.
+- Recognized that comparisons across conditions must account for differences in patient populations and measure definitions.
+- Decided to use hospital ratings as supporting hospital information rather than as a replacement for readmission performance metrics.
+5. Final analysis table structure
+- Created public.hospital_readmission_analysis to combine hospital information and HRRP data.
+- Designed the table to contain one row per hospital.
+- Converted the six HRRP conditions from separate rows into separate column groups.
+- Joined hospital information and HRRP data using Facility ID.
+- Used a LEFT JOIN so hospitals in the hospital information table are retained even when HRRP records are unavailable.
+- Created separate column groups for AMI, CABG, COPD, Heart Failure, Hip/Knee Replacement, and Pneumonia.
+- Retained discharge counts for each condition.
+- Retained numeric readmission counts for each condition.
+- Retained separate readmission display-status columns for each condition.
+- Retained calculated crude readmission rates for each condition.
+- Retained Excess Readmission Ratio for each condition.
+- Retained Predicted Readmission Rate for each condition.
+- Retained Expected Readmission Rate for each condition.
+- Excluded upper-bound readmission-rate columns from the final design.
+6. Validation decisions and checks completed
+- Verified that the HRRP raw table contains no duplicate Facility ID and Measure Name combinations.
+- Verified that the final analysis table contains no duplicate Facility IDs using GROUP BY and HAVING COUNT(*) > 1.
+- The duplicate check returned zero rows.
+- Verified the AMI display-status distribution in the final table.
+- AMI <10 records: 496.
+- AMI N/A records: 1,303.
+- AMI unmatched records: 2,220.
+- AMI numeric readmission-count records: 1,236.
+- Confirmed that these four AMI categories total 5,255 hospitals.
+- Verified that the AMI suppressed and N/A counts match the original HRRP distribution.
+7. Known limitations and pending verification
+- HRRP Start Date originally uses MM-DD-YYYY formatting, while End Date uses MM/DD/YYYY formatting.
+- Date conversion in the earlier cleaning process resulted in NULL dates and needs correction if dates are required later.
+- Suppressed HRRP records do not provide discharge denominators, so their readmission rates cannot be calculated.
+- Some hospitals have no matching HRRP records, and these must remain distinguishable from N/A.
+- The six-condition status validation query has not yet been completed; only AMI has been verified in the final analysis table.
+- The total row count of hospital_readmission_analysis should still be checked independently.
+- National and state weighted benchmarking calculations have been planned conceptually but have not yet been implemented or validated.
+
+Current status: The cleaned source tables and combined hospital-level analysis table have been created, and the one-row-per-hospital duplicate check and AMI status check have passed. The remaining validation is to check all six conditions and confirm the final table row count.
